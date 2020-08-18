@@ -29,7 +29,7 @@ public class Main extends JFrame {
     public float zoom = 1;
     private int ups;
     private long time;
-    private boolean shouldRender = true;
+    private boolean dragging = false;
     private int mouseX, mouseY;
 
     public static void main(String[] args){
@@ -80,7 +80,9 @@ public class Main extends JFrame {
                 @Override
                 public void run() {
                     synchronized (generator) {
-                        generator.generate(camera, worldImage.getWorldWidth(), worldImage.getWorldHeight(),zoom);
+                        if(!dragging) {
+                            generator.generate(camera, worldImage.getWorldWidth(), worldImage.getWorldHeight(), zoom);
+                        }
                     }
                 }
             });
@@ -115,11 +117,13 @@ public class Main extends JFrame {
             public void mousePressed(MouseEvent e) {
                 clickPosX=e.getX();
                 clickPosY=e.getY();
+                dragging = true;
             }
 
             @Override
             public void mouseReleased(MouseEvent e) {
                 panel.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
+                dragging = false;
             }
 
             @Override
@@ -132,6 +136,7 @@ public class Main extends JFrame {
                 panel.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
                 mouseX = -1;
                 mouseY = -1;
+                dragging = false;
             }
         });
 
@@ -145,6 +150,7 @@ public class Main extends JFrame {
                 moveY = moveY-dy;
                 clickPosX = e.getX();
                 clickPosY = e.getY();
+                dragging = true;
             }
 
             @Override

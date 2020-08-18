@@ -1,8 +1,6 @@
 package net.matez.terr2d.math;
 
 
-import com.sun.javafx.geom.Vec3d;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,11 +22,7 @@ public class BlockPos extends Vec3i {
    public BlockPos(double x, double y, double z) {
       super(x, y, z);
    }
-
-   public BlockPos(Vec3d vec) {
-      this(vec.x, vec.y, vec.z);
-   }
-
+   
    public BlockPos(IPosition p_i50799_1_) {
       this(p_i50799_1_.getX(), p_i50799_1_.getY(), p_i50799_1_.getZ());
    }

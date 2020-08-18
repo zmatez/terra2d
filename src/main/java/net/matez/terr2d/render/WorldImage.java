@@ -18,6 +18,7 @@ public class WorldImage {
     private BlockPos oldCameraPos;
     private int oldDetails = 0;
     private float oldZoom = 0;
+    private int oldBlockSize = 0;
     private int[][] renderBlocks;
     public WorldImage(){
 
@@ -63,11 +64,8 @@ public class WorldImage {
         int worldEndX = (int)Math.ceil((float)(cameraX + worldWidth/2) / zoom);
         int worldEndZ = (int)Math.ceil((float)(cameraZ + worldHeight/2) / zoom);
 
-        if(zoom==oldZoom && details==oldDetails) {
-            move(moveX, moveZ);
-        }else{
-            renderBlocks = new int[getWorldWidth()][getWorldHeight()];
-        }
+        refreshBlockSize(blockSize);
+        move(moveX, moveZ);
 
         for(int x = renderStartX; x < renderEndX; x += blockSize){
             for(int z = renderStartZ; z < renderEndZ; z += blockSize){
@@ -83,6 +81,7 @@ public class WorldImage {
         this.oldCameraPos = cameraPos;
         this.oldDetails = details;
         this.oldZoom = zoom;
+        this.oldBlockSize = blockSize;
 
         panel.invalidate();
         panel.validate();
@@ -90,7 +89,7 @@ public class WorldImage {
     }
 
     private void setBlock(World world, int blockX, int blockZ, int x, int z, int blockSize, int details, float zoom){
-        if(bufferedImage.getRGB(x,z)==0 || details!=oldDetails || zoom!=oldZoom) {
+        if(bufferedImage.getRGB(x,z)==0 || zoom!=oldZoom) {
             BlockColumn column = world.getColumn(new ColumnPos(blockX, blockZ));
             if (column != null && column.isDirty()) {
                 renderBlock(x, column.getColumnMaxHeight(), z, blockSize, column.getBlock(column.getColumnMaxHeight()));
@@ -113,6 +112,35 @@ public class WorldImage {
                     int newZ = z + moveZ;
                     if(newX >= 0 && newZ >= 0 && newX < w && newZ < h){
                         newRenderBlocks[newX][newZ] = oldRgb;
+                    }
+                }
+            }
+            renderBlocks = newRenderBlocks;
+        }
+    }
+
+    private void refreshBlockSize(int blockSize){
+        if(blockSize != oldBlockSize && oldBlockSize!=0){
+            int w = getWorldWidth();
+            int h = getWorldHeight();
+            int[][] newRenderBlocks = new int[w][h];
+            for(int x = 0; x < w; x+=blockSize){
+                for(int z = 0; z < h; z+=blockSize){
+                    int oldRgb = renderBlocks[(int)Math.ceil((float)x/oldBlockSize)][(int)Math.ceil((float)z/oldBlockSize)];
+                    for(int i = x; i < x + blockSize; i++){
+                        for(int j = z; j < z + blockSize; j++){
+                            if(i>=bufferedImage.getWidth()){
+                                break;
+                            }
+                            if(j>=bufferedImage.getHeight()){
+                                break;
+                            }
+                            try {
+                                renderBlocks[i][j] = oldRgb;
+                            }catch (ArrayIndexOutOfBoundsException e){
+                                Main.LOGGER.fatal("Coordinate out of bounds: " + i + " " + j + " out of " + bufferedImage.getWidth() + " " + bufferedImage.getHeight());
+                            }
+                        }
                     }
                 }
             }
