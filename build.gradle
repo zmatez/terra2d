@@ -15,3 +15,9 @@ dependencies {
     testCompile group: 'junit', name: 'junit', version: '4.12'
     compile 'javax.vecmath:vecmath:1.5.2'
 }
+
+jar {
+    manifest {
+        attributes 'Main-Class': 'net.matez.terr2d.setup.Main'
+    }
+}

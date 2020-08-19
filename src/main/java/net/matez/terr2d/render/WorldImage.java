@@ -1,5 +1,6 @@
 package net.matez.terr2d.render;
 
+import com.sun.istack.internal.Nullable;
 import net.matez.terr2d.block.Block;
 import net.matez.terr2d.block.BlockRegistry;
 import net.matez.terr2d.math.BlockPos;
@@ -10,6 +11,7 @@ import net.matez.terr2d.world.World;
 
 import java.awt.*;
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
 
 public class WorldImage {
@@ -19,21 +21,21 @@ public class WorldImage {
     private int oldDetails = 0;
     private float oldZoom = 0;
     private int oldBlockSize = 0;
-    private int[][] renderBlocks;
-    public WorldImage(){
-
-    }
+    private int[][][] renderBlocks;
 
     public void createBufferedImage(int width, int height){
         Main.LOGGER.debug("Creating buffered image with size: " + width + "x" + height);
         bufferedImage = new BufferedImage(width,height,BufferedImage.TYPE_INT_ARGB);
-        renderBlocks = new int[width][height];
+        renderBlocks = new int[width][height][2];
     }
 
-    public void render(World world, Camera camera, boolean enableY, int details, float zoom, ImagePanel panel){
+    public void render(World world, Camera camera, boolean enableY, int details, float zoom, @Nullable AdvancedImagePanel panel, boolean refresh){
         if(bufferedImage==null){
             Main.LOGGER.fatal("Buffered image does not exist, cannot render!");
             return;
+        }
+        if(refresh){
+            renderBlocks = new int[getWorldWidth()][getWorldHeight()][2];
         }
         int screenWidth = bufferedImage.getWidth();
         int screenHeight = bufferedImage.getHeight();
@@ -61,8 +63,6 @@ public class WorldImage {
 
         int worldStartX = (int)Math.ceil((float)(cameraX - worldWidth/2) / zoom);
         int worldStartZ = (int)Math.ceil((float)(cameraZ - worldHeight/2) / zoom);
-        int worldEndX = (int)Math.ceil((float)(cameraX + worldWidth/2) / zoom);
-        int worldEndZ = (int)Math.ceil((float)(cameraZ + worldHeight/2) / zoom);
 
         refreshBlockSize(blockSize);
         move(moveX, moveZ);
@@ -76,42 +76,61 @@ public class WorldImage {
             }
         }
 
-        //buff.refresh(world,camera,enableY,details,zoom,screenWidth,screenHeight);
-
         this.oldCameraPos = cameraPos;
         this.oldDetails = details;
         this.oldZoom = zoom;
         this.oldBlockSize = blockSize;
 
-        panel.invalidate();
-        panel.validate();
-        panel.repaint();
+        if(panel!=null) {
+            panel.invalidate();
+            panel.validate();
+            panel.repaint();
+        }
+    }
+
+    public int getYAt(int x, int z){
+        if(x>=0 && z>=0 && x<getWorldWidth() && z<getWorldHeight()) {
+            return renderBlocks[x][z][1];
+        }
+        return -1;
     }
 
     private void setBlock(World world, int blockX, int blockZ, int x, int z, int blockSize, int details, float zoom){
-        if(bufferedImage.getRGB(x,z)==0 || zoom!=oldZoom) {
+        if(getRGB(x,z)==0 || zoom!=oldZoom) {
             BlockColumn column = world.getColumn(new ColumnPos(blockX, blockZ));
             if (column != null && column.isDirty()) {
-                renderBlock(x, column.getColumnMaxHeight(), z, blockSize, column.getBlock(column.getColumnMaxHeight()));
+                if(column.getColumnMaxHeight()<63 && Main.shouldShowWater()) {
+                    renderBlock(x, column.getColumnMaxHeight(), z, blockSize, BlockRegistry.WATER);
+                }else{
+                    renderBlock(x, column.getColumnMaxHeight(), z, blockSize, column.getBlock(column.getColumnMaxHeight()));
+                }
                 return;
             }
         }
-        int rgb = renderBlocks[x][z];
-        renderBlock(x,z,blockSize,rgb);
+        if(!isOutOfBounds(x,z)) {
+            try {
+                int rgb = renderBlocks[x][z][0];
+                renderBlock(x, z, blockSize, rgb);
+            }catch (ArrayIndexOutOfBoundsException e){
+
+            }
+        }
     }
 
     private void move(int moveX, int moveZ){
         if(moveX!=0 || moveZ!=0){
             int w = getWorldWidth();
             int h = getWorldHeight();
-            int[][] newRenderBlocks = new int[w][h];
+            int[][][] newRenderBlocks = new int[w][h][2];
             for(int x = 0; x < w; x++){
                 for(int z = 0; z < h; z++){
-                    int oldRgb = renderBlocks[x][z];
+                    int oldRgb = renderBlocks[x][z][0];
+                    int oldY = renderBlocks[x][z][1];
                     int newX = x + moveX;
                     int newZ = z + moveZ;
                     if(newX >= 0 && newZ >= 0 && newX < w && newZ < h){
-                        newRenderBlocks[newX][newZ] = oldRgb;
+                        newRenderBlocks[newX][newZ][0] = oldRgb;
+                        newRenderBlocks[newX][newZ][1] = oldY;
                     }
                 }
             }
@@ -123,10 +142,12 @@ public class WorldImage {
         if(blockSize != oldBlockSize && oldBlockSize!=0){
             int w = getWorldWidth();
             int h = getWorldHeight();
-            int[][] newRenderBlocks = new int[w][h];
+            int[][][] newRenderBlocks = new int[w][h][2];
             for(int x = 0; x < w; x+=blockSize){
                 for(int z = 0; z < h; z+=blockSize){
-                    int oldRgb = renderBlocks[(int)Math.ceil((float)x/oldBlockSize)][(int)Math.ceil((float)z/oldBlockSize)];
+                    int[] buff = renderBlocks[(int)Math.ceil((float)x/oldBlockSize)][(int)Math.ceil((float)z/oldBlockSize)];
+                    int oldRgb = buff[0];
+                    int oldY = buff[1];
                     for(int i = x; i < x + blockSize; i++){
                         for(int j = z; j < z + blockSize; j++){
                             if(i>=bufferedImage.getWidth()){
@@ -136,9 +157,10 @@ public class WorldImage {
                                 break;
                             }
                             try {
-                                renderBlocks[i][j] = oldRgb;
+                                renderBlocks[i][j][0] = oldRgb;
+                                renderBlocks[i][j][1] = oldY;
                             }catch (ArrayIndexOutOfBoundsException e){
-                                Main.LOGGER.fatal("Coordinate out of bounds: " + i + " " + j + " out of " + bufferedImage.getWidth() + " " + bufferedImage.getHeight());
+
                             }
                         }
                     }
@@ -146,6 +168,10 @@ public class WorldImage {
             }
             renderBlocks = newRenderBlocks;
         }
+    }
+
+    public int getOldBlockSize() {
+        return oldBlockSize;
     }
 
     public int getWorldWidth(){
@@ -156,7 +182,7 @@ public class WorldImage {
         return bufferedImage.getHeight();
     }
 
-    private void renderBlock(int x, int yFactor, int z, int size, Block block){
+    private void renderBlock(int x, int y, int z, int size, Block block){
         if(x>bufferedImage.getWidth()){
             return;
         }
@@ -176,10 +202,33 @@ public class WorldImage {
         int b = color.getBlue();
         int a = color.getAlpha();
 
-        int darken = yFactor;
+        int darken = 0;
+        if(Main.getHeightDiv()==0){
+            darken = y;
+        }else{
+            darken = ((int)(y/Main.getHeightDiv()))*Main.getHeightDiv();
+        }
         r = r - darken;
         g = g - darken;
         b = b - darken;
+        if(r > 255){
+            r = 255;
+        }
+        if(g > 255){
+            g = 255;
+        }
+        if(b > 255){
+            b = 255;
+        }
+        if(r < 0){
+            r = 0;
+        }
+        if(g < 0){
+            g = 0;
+        }
+        if(b < 0){
+            b = 0;
+        }
         Color finalColor = new Color(r,g,b,a);
 
         for(int i = x; i < x + size; i++){
@@ -192,9 +241,10 @@ public class WorldImage {
                 }
                 try {
                     bufferedImage.setRGB(i, j, finalColor.getRGB());
-                    renderBlocks[i][j] = finalColor.getRGB();
+                    renderBlocks[i][j][0] = finalColor.getRGB();
+                    renderBlocks[i][j][1] = y;
                 }catch (ArrayIndexOutOfBoundsException e){
-                    Main.LOGGER.fatal("Coordinate out of bounds: " + i + " " + j + " out of " + bufferedImage.getWidth() + " " + bufferedImage.getHeight());
+
                 }
             }
         }
@@ -225,7 +275,7 @@ public class WorldImage {
                 try {
                     bufferedImage.setRGB(i, j, rgb);
                 }catch (ArrayIndexOutOfBoundsException e){
-                    Main.LOGGER.fatal("Coordinate out of bounds: " + i + " " + j + " out of " + bufferedImage.getWidth() + " " + bufferedImage.getHeight());
+
                 }
             }
         }
@@ -261,10 +311,42 @@ public class WorldImage {
                 try {
                     bufferedImage.setRGB(i, j, color.getRGB());
                 } catch (ArrayIndexOutOfBoundsException e) {
-                    Main.LOGGER.fatal("Coordinate out of bounds: " + i + " " + j + " out of " + bufferedImage.getWidth() + " " + bufferedImage.getHeight());
+
                 }
             }
         }
+    }
+
+    private int getRGB(int x, int z) {
+        if (x > bufferedImage.getWidth()) {
+            return 0;
+        }
+        if (z > bufferedImage.getHeight()) {
+            return 0;
+        }
+        if (x < 0) {
+            return 0;
+        }
+        if (z < 0) {
+            return 0;
+        }
+        return bufferedImage.getRGB(x,z);
+    }
+
+    private boolean isOutOfBounds(int x, int z) {
+        if (x > bufferedImage.getWidth()) {
+            return true;
+        }
+        if (z > bufferedImage.getHeight()) {
+            return true;
+        }
+        if (x < 0) {
+            return true;
+        }
+        if (z < 0) {
+            return true;
+        }
+        return false;
     }
 
     public BufferedImage getBufferedImage() {
