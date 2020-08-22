@@ -2,9 +2,9 @@ package net.matez.terr2d.math;
 
 import java.util.Objects;
 
-public class ColumnPos {
+public class XZPos {
     private int x,z;
-    public ColumnPos(int x, int z){
+    public XZPos(int x, int z){
         this.x=x;
         this.z=z;
     }
@@ -35,32 +35,32 @@ public class ColumnPos {
         this.z+=z;
     }
 
-    public static ColumnPos add(ColumnPos vec1, ColumnPos vec2){
-        return new ColumnPos(vec1.getX() + vec2.getX(), vec1.getZ() + vec2.getZ());
+    public static XZPos add(XZPos vec1, XZPos vec2){
+        return new XZPos(vec1.getX() + vec2.getX(), vec1.getZ() + vec2.getZ());
     }
 
-    public static ColumnPos subtract(ColumnPos vec1, ColumnPos vec2){
-        return new ColumnPos(vec1.getX() - vec2.getX(), vec1.getZ() - vec2.getZ());
+    public static XZPos subtract(XZPos vec1, XZPos vec2){
+        return new XZPos(vec1.getX() - vec2.getX(), vec1.getZ() - vec2.getZ());
     }
 
-    public static ColumnPos multiply(ColumnPos vec1, ColumnPos vec2){
-        return new ColumnPos(vec1.getX() * vec2.getX(), vec1.getZ() * vec2.getZ());
+    public static XZPos multiply(XZPos vec1, XZPos vec2){
+        return new XZPos(vec1.getX() * vec2.getX(), vec1.getZ() * vec2.getZ());
     }
 
-    public static ColumnPos divide(ColumnPos vec1, ColumnPos vec2){
-        return new ColumnPos(vec1.getX() / vec2.getX(), vec1.getZ() / vec2.getZ());
+    public static XZPos divide(XZPos vec1, XZPos vec2){
+        return new XZPos(vec1.getX() / vec2.getX(), vec1.getZ() / vec2.getZ());
     }
 
-    public static int length(ColumnPos vector){
+    public static int length(XZPos vector){
         return (int)Math.sqrt(vector.getX() * vector.getX() + vector.getZ() * vector.getZ());
     }
 
-    public static ColumnPos normalize(ColumnPos vector){
-        int len = ColumnPos.length(vector);
-        return ColumnPos.divide(vector,new ColumnPos(len,len));
+    public static XZPos normalize(XZPos vector){
+        int len = XZPos.length(vector);
+        return XZPos.divide(vector,new XZPos(len,len));
     }
 
-    public static int dot(ColumnPos vec1, ColumnPos vec2) {
+    public static int dot(XZPos vec1, XZPos vec2) {
         return vec1.getX() * vec2.getX() + vec1.getZ() * vec2.getZ();
     }
 
@@ -68,7 +68,7 @@ public class ColumnPos {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ColumnPos columnPos = (ColumnPos) o;
+        XZPos columnPos = (XZPos) o;
         return x == columnPos.x &&
                 z == columnPos.z;
     }

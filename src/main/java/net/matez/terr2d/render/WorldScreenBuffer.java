@@ -1,13 +1,8 @@
 package net.matez.terr2d.render;
 
-import net.matez.terr2d.block.Block;
 import net.matez.terr2d.math.BlockPos;
-import net.matez.terr2d.math.ColumnPos;
-import net.matez.terr2d.world.BlockColumn;
+import net.matez.terr2d.math.XZPos;
 import net.matez.terr2d.world.World;
-
-import java.util.HashMap;
-import java.util.Map;
 
 public class WorldScreenBuffer {
     private int oldWidth, oldHeight;
@@ -35,7 +30,7 @@ public class WorldScreenBuffer {
             needs = true;
         }else if(oldZoom!=zoom){
             needs = true;
-        }else if(!world.getColumn(new ColumnPos(x,z)).isDirty()){
+        }else if(!world.getChunk(x,z).getColumn(x,z).isDirty()){
             needs = true;
         }
         return needs;

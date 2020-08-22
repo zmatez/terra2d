@@ -11,19 +11,23 @@ import java.util.Arrays;
 public class HUDImage {
     private BufferedImage bufferedImage;
     private static Color POINTER_COLOR = new Color(255, 140, 149, 175);
+    private static Color CAMERA_COLOR = new Color(3, 255, 57, 175);
     private static Color ZERO_POS_COLOR = new Color(140, 242, 255, 90);
     private static Color TRANSPARENT = new Color(0, 0, 0, 0);
 
-    private int oldMouseX, oldMouseY, oldPointerX, oldPointerY, oldDetails;
-    private float oldZoom;
+    private int oldMouseX, oldMouseY, oldPointerX, oldPointerY;
     private int oldCameraX, oldCameraY;
+
+    private float oldZoom;
+
+    private static int HUD_SIZE = 3;
 
     public void createBufferedImage(int width, int height) {
         Main.LOGGER.debug("Creating buffered image with size: " + width + "x" + height);
-        bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        bufferedImage = RenderUtils.createHardwareAcceleratedImage(width,height,true);
     }
 
-    public void render(WorldImage image, Camera camera, int details, float zoom, int mouseX, int mouseY, AdvancedImagePanel panel, boolean refresh) {
+    public void render(Camera camera, float zoom, int mouseX, int mouseY, boolean refresh) {
         if (bufferedImage == null) {
             Main.LOGGER.fatal("Buffered image does not exist, cannot render!");
             return;
@@ -32,7 +36,7 @@ public class HUDImage {
         int cameraX = cameraPos.getX();
         int cameraZ = cameraPos.getZ();
 
-        if (oldMouseX != mouseX || oldMouseY != mouseY || cameraX != oldCameraX || cameraZ != oldCameraY || zoom != oldZoom || details != oldDetails || refresh) {
+        if (oldMouseX != mouseX || oldMouseY != mouseY || cameraX != oldCameraX || cameraZ != oldCameraY || refresh || zoom != oldZoom) {
             int[] data = ((DataBufferInt) bufferedImage.getRaster().getDataBuffer()).getData();
             Arrays.fill(data, 0x00000000);//transparency
         }
@@ -40,13 +44,10 @@ public class HUDImage {
         oldMouseY = mouseY;
         oldCameraX = cameraX;
         oldCameraY = cameraZ;
-        oldDetails = details;
         oldZoom = zoom;
 
         int screenWidth = bufferedImage.getWidth();
         int screenHeight = bufferedImage.getHeight();
-
-        int blockSize = (int) Math.ceil((float) details / zoom);
 
 
         int renderStartX = 0;
@@ -54,37 +55,30 @@ public class HUDImage {
         int renderEndX = screenWidth;
         int renderEndZ = screenHeight;
 
-        float visibleScreenWidth = screenWidth / zoom;
-        float visibleScreenHeight = screenHeight / zoom;
-        int worldWidth = (int) Math.ceil((float) visibleScreenWidth);
-        int worldHeight = (int) Math.ceil((float) visibleScreenHeight);
-        ;
-        int worldStartX = (int) Math.ceil((float) (cameraX - worldWidth / 2) / zoom);
-        int worldStartZ = (int) Math.ceil((float) (cameraZ - worldHeight / 2) / zoom);
+        int worldStartX = (int) Math.ceil((float) (cameraX - screenWidth / 2));
+        int worldStartZ = (int) Math.ceil((float) (cameraZ - screenHeight / 2));
 
-        for (int x = renderStartX; x < renderEndX; x += blockSize) {
-            for (int z = renderStartZ; z < renderEndZ; z += blockSize) {
-                if ((x + worldStartX <= 0 && x + worldStartX + blockSize > 0) || (z + worldStartZ <= 0 && z + worldStartZ + blockSize > 0)) {
-                    renderBlock(x, z, blockSize, ZERO_POS_COLOR);
+        for (int x = renderStartX; x < renderEndX; x ++) {
+            for (int z = renderStartZ; z < renderEndZ; z ++) {
+                if ((x + worldStartX <= 0 && x + worldStartX + HUD_SIZE > 0) || (z + worldStartZ <= 0 && z + worldStartZ + HUD_SIZE > 0)) {
+                    renderBlock(x, z, HUD_SIZE, ZERO_POS_COLOR);
                 }
 
-                if (x <= mouseX && x + blockSize > mouseX) {
-                    if (z <= mouseY && z + blockSize > mouseY) {
+                if (x/zoom <= mouseX && x/zoom + HUD_SIZE > mouseX) {
+                    if (z/zoom <= mouseY && z/zoom + HUD_SIZE > mouseY) {
                         oldPointerX = x;
                         oldPointerY = z;
-                        renderBlock(x, z, blockSize, POINTER_COLOR);
+                        renderBlock(x, z, HUD_SIZE, POINTER_COLOR);
+                    }
+                }
+                if (x + worldStartX <= cameraX && x + worldStartX + HUD_SIZE > cameraX) {
+                    if (z + worldStartZ <= cameraZ && z + worldStartZ + HUD_SIZE > cameraZ) {
+                        renderBlock(x, z, HUD_SIZE, CAMERA_COLOR);
                     }
                 }
 
             }
         }
-
-        panel.invalidate();
-        panel.validate();
-        panel.repaint();
-
-
-        //renderBlock(cameraX, cameraZ, blockSize, POINTER_COLOR);
     }
 
     public int getOldPointerX() {

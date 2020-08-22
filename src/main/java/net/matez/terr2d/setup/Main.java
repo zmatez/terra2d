@@ -3,6 +3,7 @@ package net.matez.terr2d.setup;
 import net.matez.terr2d.log.Logger;
 import net.matez.terr2d.math.BlockPos;
 import net.matez.terr2d.render.*;
+import net.matez.terr2d.world.Chunk;
 import net.matez.terr2d.world.World;
 import net.matez.terr2d.world.WorldGenerator;
 
@@ -17,24 +18,26 @@ public class Main extends JFrame {
     public static Main instance;
     public static Logger LOGGER;
     public World world;
-    public WorldImage worldImage;
     public HUDImage hudImage;
     public DataImage dataImage;
     public Camera camera;
     public AdvancedImagePanel panel;
+    public ChunkRenderer chunkRenderer;
+    public WorldRenderer worldRenderer;
     public final WorldGenerator generator;
+
     private static int dragMoveX = 0, dragMoveY = 0, clickPosX, clickPosY;
-    public int details = 3;
-    public float zoom = 1;
+    private int dragSmoothness = 1;
+    public static float zoom = 1;
     private int ups;
     private long time;
     private boolean dragging = false;
-    private int mouseX, mouseY, oldMouseX, oldMouseY;
-    private DataImage dataLabel;
+    private int mouseX, mouseY;
     private String dataText = "";
-    private boolean refreshVisuals = false;
-    private static boolean showWater = true;
+    private static boolean refreshVisuals = false;
+    private static boolean showWater = false;
     private static boolean showKeybindings = false;
+    private static boolean renderChunkData = false;
     private static int heightDiv = 0;
 
     private String keybindings = "Keybindings:" +
@@ -42,6 +45,7 @@ public class Main extends JFrame {
             "\nDetails: CTRL+SCROLL" +
             "\nRefresh visuals: CTRL+A" +
             "\nToggle water: CTRL+W" +
+            "\nToggle chunk details: CTRL+D" +
             "\nHeightmap Details +: CTRL+[" +
             "\nHeightmap Details -: CTRL+]" +
             "\nTake a screenshot: CTRL+S";
@@ -66,16 +70,19 @@ public class Main extends JFrame {
     public Main() {
         this.world = new World();
         this.generator = new WorldGenerator(world);
-        this.worldImage = new WorldImage();
         this.hudImage = new HUDImage();
         this.dataImage = new DataImage();
         this.camera = new Camera();
+        this.chunkRenderer = new ChunkRenderer();
+        this.worldRenderer = new WorldRenderer();
         camera.setLocation(new BlockPos(frame.getWidth() / 2, 0, frame.getHeight() / 2));
-        worldImage.createBufferedImage(frame.getWidth(), frame.getHeight());
+        int width = Math.round(frame.getWidth()*zoom);
+        int height = Math.round(frame.getHeight()*zoom);
         hudImage.createBufferedImage(frame.getWidth(), frame.getHeight());
         dataImage.createBufferedImage(frame.getWidth(), frame.getHeight());
+        worldRenderer.create(width, height);
 
-        panel = new AdvancedImagePanel(worldImage.getBufferedImage(), hudImage.getBufferedImage(), dataImage.getBufferedImage());
+        panel = new AdvancedImagePanel(worldRenderer.getBufferedImage(), hudImage.getBufferedImage(), dataImage.getBufferedImage(),frame.getWidth(),frame.getHeight());
         panel.setBounds(0, 0, frame.getWidth(), frame.getHeight());
         panel.setBackground(Color.BLACK);
         frame.add(panel);
@@ -92,61 +99,87 @@ public class Main extends JFrame {
 
     private void gameLoop(){
         while (true) {
-            boolean visualsRefresh = shouldRefreshVisuals();
-            camera.setLocation(camera.getLocation().add(dragMoveX, 0, dragMoveY));
-            dragMoveX = 0;
-            dragMoveY = 0;
-            CompletableFuture.runAsync(new Runnable() {
-                @Override
-                public void run() {
-                    synchronized (generator) {
-                        if (!dragging) {
-                            generator.generate(camera, worldImage.getWorldWidth(), worldImage.getWorldHeight(), zoom);
-                        }
-                    }
-                }
-            });
 
-            worldImage.render(world, camera, false, details, zoom, panel,refreshVisuals);
-            hudImage.render(worldImage, camera, details, zoom, mouseX, mouseY, panel,refreshVisuals);
-            int screenWidth = frame.getWidth();
-            int screenHeight = frame.getHeight();
-            float visibleScreenWidth = screenWidth / zoom;
-            float visibleScreenHeight = screenHeight / zoom;
-            int worldWidth = (int)Math.ceil((float)visibleScreenWidth);
-            int worldHeight = (int)Math.ceil((float)visibleScreenHeight);
-            BlockPos cameraPos = camera.getLocation();
-            int cameraX = cameraPos.getX();
-            int cameraZ = cameraPos.getZ();
-            int worldStartX = (int)Math.ceil((float)(cameraX - worldWidth/2) / zoom);
-            int worldStartZ = (int)Math.ceil((float)(cameraZ - worldHeight/2) / zoom);
-
-            int[] generatedWorldSize = world.getGeneratedWorldSize();
-            dataText = "Terra2D Terrain Visualizer" +
-                    "\n---------" +
-                    "\nCoordinates: " + "x"+(hudImage.getOldPointerX()+worldStartX) + " y"+ worldImage.getYAt(mouseX,mouseY) + " z" +(hudImage.getOldPointerY() + worldStartZ) +
-                    "\nWorld Visible Size: " + worldWidth + "x" +worldHeight +
-                    "\nWorld Generated Size: " + generatedWorldSize[0] + "x" +generatedWorldSize[1] +
-                    "\nScreen Size: " + screenWidth + "x" + screenHeight +
-                    "\nZoom: " + (double)zoom + " Details: " + details +
-                    "\nBlock size: " + worldImage.getOldBlockSize() + "px2" +
-                    "\nHeightmap Details: " + getHeightDiv();
-
-            if(showKeybindings){
-                dataText = dataText + "\n\n\n"+keybindings;
-            }
-
-            dataImage.render(dataText, panel,refreshVisuals, showKeybindings,18);
+            updateApp();
+            renderApp();
 
             if (time != 0) {
                 ups = (int) (System.currentTimeMillis() - time);
             }
             time = System.currentTimeMillis();
             frame.setTitle("Terra2D - - - made by matez - - - " + ups + "ms");
+        }
+    }
 
-            if(visualsRefresh){
-                refreshVisuals = false;
+    private void updateApp(){
+        camera.setLocation(camera.getLocation().add(Math.round(dragMoveX*zoom), 0, Math.round(dragMoveY*zoom)));
+        dragMoveX=0;
+        dragMoveY=0;
+
+        CompletableFuture.runAsync(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (generator) {
+                    if (!dragging) {
+                        generator.generate(camera, worldRenderer.getWidth(), worldRenderer.getHeight());
+                    }
+                }
             }
+        });
+    }
+
+    private void renderApp(){
+        boolean visualsRefresh = shouldRefreshVisuals();
+
+        chunkRenderer.setRenderWater(shouldShowWater());
+
+        //
+        CompletableFuture.runAsync(new Runnable() {
+            @Override
+            public void run() {
+                synchronized (chunkRenderer) {
+                    chunkRenderer.renderChunks(world,camera, worldRenderer.getWidth(), worldRenderer.getHeight(), refreshVisuals);
+                }
+            }
+        });
+
+        worldRenderer.render(world,camera, renderChunkData,refreshVisuals,zoom);
+        hudImage.render(camera,zoom, mouseX, mouseY,refreshVisuals);
+        int screenWidth = worldRenderer.getWidth();
+        int screenHeight = worldRenderer.getHeight();
+        BlockPos cameraPos = camera.getLocation();
+        int cameraX = cameraPos.getX();
+        int cameraZ = cameraPos.getZ();
+        int worldStartX = (int) Math.ceil((float) (cameraX - screenWidth / 2));
+        int worldStartZ = (int) Math.ceil((float) (cameraZ - screenHeight / 2));
+
+        int pointerX = (hudImage.getOldPointerX()+worldStartX);
+        int pointerZ = (hudImage.getOldPointerY()+worldStartZ);
+
+        int pointerY = world.getChunk(pointerX,pointerZ).getColumn(pointerX,pointerZ).getColumnMaxHeight();
+
+        //int[] generatedWorldSize = world.getGeneratedWorldSize();
+        dataText = "Terra2D Terrain Visualizer" +
+                "\n---------" +
+                "\nCoordinates: " + "x"+ pointerX + " y" + pointerY+ " z" + pointerZ +
+                "\nWorld Generated Size: " + /*generatedWorldSize[0] + "x" +generatedWorldSize[1] +*/
+                "\nScreen Size: " + screenWidth + "x" + screenHeight +
+                "\nZoom: " + (double)zoom +
+                "\nHeightmap Details: " + getHeightDiv();
+
+        if(showKeybindings){
+            dataText = dataText + "\n\n\n"+keybindings;
+        }
+
+        dataImage.render(dataText,refreshVisuals, showKeybindings,18);
+        //
+
+        panel.invalidate();
+        panel.validate();
+        panel.repaint();
+
+        if(visualsRefresh){
+            refreshVisuals = false;
         }
     }
 
@@ -229,32 +262,23 @@ public class Main extends JFrame {
             @Override
             public void mouseWheelMoved(MouseWheelEvent e) {
                 int val = e.getUnitsToScroll() / 3;
-                if (isControlDown) {
-                    details += val;
-                    if (details <= 0) {
-                        details = 1;
-                    }
-                } else {
-                    zoom += (float) val / 30;
-                    if (zoom < 0) {
-                        zoom = 0;
-                    }
+                zoom += (float) val / 30;
+                if (zoom < 0.1f) {
+                    zoom = 0.1f;
                 }
+                zoom(zoom);
             }
         });
 
         frame.addComponentListener(new ComponentAdapter() {
             public void componentResized(ComponentEvent evt) {
-                if (worldImage.getWorldWidth() == evt.getComponent().getWidth() && worldImage.getWorldHeight() == evt.getComponent().getHeight()) {
+                if (worldRenderer.getWidth() == evt.getComponent().getWidth() && worldRenderer.getHeight() == evt.getComponent().getHeight()) {
                     return;
                 }
                 if (evt.getComponent() != frame) {
                     return;
                 }
-                worldImage.createBufferedImage(frame.getWidth(), frame.getHeight());
-                hudImage.createBufferedImage(frame.getWidth(), frame.getHeight());
-                dataImage.createBufferedImage(frame.getWidth(), frame.getHeight());
-                panel.setImage(worldImage.getBufferedImage(), hudImage.getBufferedImage(), dataImage.getBufferedImage());
+                zoom(zoom);
                 panel.setBounds(0, 0, frame.getWidth(), frame.getHeight());
                 frame.invalidate();
                 frame.validate();
@@ -263,6 +287,19 @@ public class Main extends JFrame {
         });
         panel.setFocusable(true);
         panel.requestFocus();
+    }
+
+    public void zoom(float newZoom){
+        zoom = newZoom;
+        int width = Math.round(frame.getWidth()*newZoom);
+        int height = Math.round(frame.getHeight()*newZoom);
+        worldRenderer.create(width, height);
+        hudImage.createBufferedImage(width, height);
+        dataImage.createBufferedImage(frame.getWidth(), frame.getHeight());
+        panel.setImage(worldRenderer.getBufferedImage(), hudImage.getBufferedImage(), dataImage.getBufferedImage(),frame.getWidth(),frame.getHeight());
+        frame.invalidate();
+        frame.validate();
+        frame.repaint();
     }
 
     public boolean shouldRefreshVisuals() {
@@ -330,6 +367,13 @@ public class Main extends JFrame {
                     }
                     refreshVisuals = true;
                 }
+                if (e.getKeyCode() == KeyEvent.VK_D) {
+                    if (renderChunkData) {
+                        renderChunkData = false;
+                    } else {
+                        renderChunkData = true;
+                    }
+                }
                 if (e.getKeyCode() == KeyEvent.VK_OPEN_BRACKET) {
                     heightDiv++;
                     refreshVisuals = true;
@@ -341,7 +385,7 @@ public class Main extends JFrame {
                     }
                 }
                 if (e.getKeyCode() == KeyEvent.VK_S) {
-                    ScreenshotCreator creator = new ScreenshotCreator(generator,world,camera,frame.getWidth(),frame.getHeight(),details,zoom);
+                    ScreenshotCreator creator = new ScreenshotCreator(generator,chunkRenderer,world,camera,frame.getWidth(),frame.getHeight(),zoom);
                 }
             }
         }else{
@@ -349,5 +393,9 @@ public class Main extends JFrame {
         }
         isControlDown = e.isControlDown();
         isAltDown = e.isAltDown();
+    }
+
+    public static void setRefreshVisuals(boolean r) {
+        refreshVisuals = r;
     }
 }

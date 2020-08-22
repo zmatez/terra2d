@@ -2,63 +2,68 @@ package net.matez.terr2d.world;
 
 import net.matez.terr2d.block.Block;
 import net.matez.terr2d.math.BlockPos;
-import net.matez.terr2d.math.ColumnPos;
+import net.matez.terr2d.math.XZPos;
+import net.matez.terr2d.setup.Main;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class World {
-    private Map<ColumnPos, BlockColumn> columns;
+    private HashMap<XZPos, Chunk> chunks;
     private int seaLevel = 63;
     private int genMinX, genMinZ, genMaxX, genMaxZ;
     private long seed = 2137L;
     public World(){
-        columns = new HashMap<>();
+        chunks = new HashMap<XZPos, Chunk>();
     }
 
-    public BlockColumn getColumn(ColumnPos pos){
+    public Chunk getChunk(XZPos pos){
+        return getChunk(pos.getX(),pos.getZ());
+    }
+
+    public Chunk getChunk(BlockPos pos){
+        return getChunk(pos.getX(),pos.getZ());
+    }
+
+    public Chunk getChunk(int x, int z){
         try {
-            BlockColumn column = columns.get(pos);
-            if (column == null) {
-                column = new BlockColumn(pos);
-                columns.put(pos, column);
-                if(genMinX > pos.getX()){
-                    genMinX = pos.getX();
-                }
-                if(genMinZ > pos.getZ()){
-                    genMinZ = pos.getZ();
-                }
-                if(genMaxX < pos.getX()){
-                    genMaxX = pos.getX();
-                }
-                if(genMaxZ < pos.getZ()){
-                    genMaxZ = pos.getZ();
-                }
+            XZPos chunkPos = new XZPos(roundToChunkPos(x),roundToChunkPos(z));
+            Chunk chunk = chunks.get(chunkPos);
+            if (chunk == null) {
+                chunk = new Chunk(chunkPos);
+                chunks.put(chunkPos, chunk);
             }
-            return column;
+            return chunk;
         }catch (ClassCastException e){
+            Main.LOGGER.debug("Error");
             return null;
         }
     }
 
+    private int roundToChunkPos(int i){
+        if(i>=0) {
+            return (int) Math.floor((double)i / Chunk.CHUNK_SIZE) * Chunk.CHUNK_SIZE;
+        }else{
+            return -((int) Math.ceil((double)Math.abs(i) / Chunk.CHUNK_SIZE) * Chunk.CHUNK_SIZE);
+        }
+    }
+
     public Block getBlock(BlockPos pos){
-        BlockColumn column = getColumn(new ColumnPos(pos.getX(),pos.getZ()));
-        return column.getBlock(pos.getY());
+        return getChunk(pos).getColumn(pos).getBlock(pos.getY());
     }
 
     public void setBlock(BlockPos pos, Block state){
-        BlockColumn column = getColumn(new ColumnPos(pos.getX(),pos.getZ()));
-        column.setBlock(pos.getY(),state);
+        getChunk(pos).getColumn(pos).setBlock(pos.getY(),state);
     }
 
     public int getSeaLevel() {
         return seaLevel;
     }
 
-    public int[] getGeneratedWorldSize(){
+    /*public int[] getGeneratedWorldSize(){
         int[] i = new int[2];
         i[0] = Math.abs(genMinX)+genMaxX+1;
         i[1] = Math.abs(genMinZ)+genMaxZ+1;
         return i;
-    }
+    }*/
 }

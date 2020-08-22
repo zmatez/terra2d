@@ -2,8 +2,9 @@ package net.matez.terr2d.setup;
 
 import net.matez.terr2d.math.BlockPos;
 import net.matez.terr2d.render.Camera;
+import net.matez.terr2d.render.ChunkRenderer;
 import net.matez.terr2d.render.DataImage;
-import net.matez.terr2d.render.WorldImage;
+import net.matez.terr2d.render.WorldRenderer;
 import net.matez.terr2d.world.World;
 import net.matez.terr2d.world.WorldGenerator;
 
@@ -25,7 +26,7 @@ public class ScreenshotCreator extends JDialog {
     private JProgressBar bar;
     private Font font = new Font("Segoe UI", Font.PLAIN, 12);
 
-    public ScreenshotCreator(WorldGenerator generator, World world, Camera camera, int screenWidth, int screenHeight, int details, float zoom) {
+    public ScreenshotCreator(WorldGenerator generator, ChunkRenderer renderer,World world, Camera camera, int screenWidth, int screenHeight, float zoom) {
         Main.LOGGER.progress("Starting Screenshot Creator");
         frame = new JDialog();
         frame.setSize(250, 340);
@@ -78,29 +79,17 @@ public class ScreenshotCreator extends JDialog {
         sizeHeightSpinner.setBounds(120, 70, 115, 20);
         frame.add(sizeHeightSpinner);
 
-
-        SpinnerNumberModel detailsModel = new SpinnerNumberModel(details, 1, null, 1);
-        JLabel detailsLabel = new JLabel("Details");
-        detailsLabel.setFont(font);
-        detailsLabel.setBounds(5, 105, frame.getWidth() - 10, 15);
-        frame.add(detailsLabel);
-        JSpinner detailsSpinner = new JSpinner();
-        detailsSpinner.setValue(details);
-        detailsSpinner.setBounds(5, 120, 115, 20);
-        detailsSpinner.setModel(detailsModel);
-        frame.add(detailsSpinner);
-
         Float floatValue = zoom;
         Float floatStep = 0.25f;
         SpinnerNumberModel zoomModel = new SpinnerNumberModel(floatValue, 0.000001F, null, floatStep);
         JLabel zoomLabel = new JLabel("Zoom");
         zoomLabel.setFont(font);
-        zoomLabel.setBounds(5, 155, frame.getWidth() - 10, 15);
+        zoomLabel.setBounds(5, 105, frame.getWidth() - 10, 15);
         frame.add(zoomLabel);
         JSpinner zoomSpinner = new JSpinner();
         zoomSpinner.setModel(zoomModel);
         zoomSpinner.setValue(zoom);
-        zoomSpinner.setBounds(5, 170, 115, 20);
+        zoomSpinner.setBounds(5, 120, 115, 20);
         frame.add(zoomSpinner);
 
         JLabel pathLabel = new JLabel("Output file path");
@@ -141,10 +130,10 @@ public class ScreenshotCreator extends JDialog {
         frame.add(button);
 
         button.addActionListener(a -> {
-            if(camXSpinner.getValue()!=null && camZSpinner.getValue()!=null && sizeWidthSpinner.getValue()!=null && sizeHeightSpinner.getValue()!=null && detailsSpinner.getValue()!=null && zoomSpinner.getValue()!=null && !field.getText().isEmpty()){
+            if(camXSpinner.getValue()!=null && camZSpinner.getValue()!=null && sizeWidthSpinner.getValue()!=null && sizeHeightSpinner.getValue()!=null && zoomSpinner.getValue()!=null && !field.getText().isEmpty()){
                 File f = new File(field.getText());
                 if(!f.isDirectory()){
-                    takeScreenshot(generator,world,(int)camXSpinner.getValue(),(int)camZSpinner.getValue(),(int)sizeWidthSpinner.getValue(),(int)sizeHeightSpinner.getValue(),(int)detailsSpinner.getValue(),(float)zoomSpinner.getValue(),f);
+                    takeScreenshot(generator,renderer,world,(int)camXSpinner.getValue(),(int)camZSpinner.getValue(),(int)sizeWidthSpinner.getValue(),(int)sizeHeightSpinner.getValue(),(float)zoomSpinner.getValue(),f);
                 }
             }
         });
@@ -158,32 +147,33 @@ public class ScreenshotCreator extends JDialog {
         frame.repaint();
     }
 
-    public void takeScreenshot(WorldGenerator generator, World world, int cameraX, int cameraZ, int outputResWidth, int outputResHeight, int details, float zoom, File output) {
+    public void takeScreenshot(WorldGenerator generator, ChunkRenderer chunkRenderer, World world, int cameraX, int cameraZ, int outputResWidth, int outputResHeight, float zoom, File output) {
         Main.LOGGER.progress("Taking screenshot...");
         bar.setIndeterminate(true);
         new Thread(new Runnable() {
             @Override
             public void run() {
-                WorldImage image = new WorldImage();
+                WorldRenderer renderer = new WorldRenderer();
                 DataImage data = new DataImage();
-                image.createBufferedImage(outputResWidth, outputResHeight);
+                renderer.create(outputResWidth, outputResHeight);
                 data.createBufferedImage(outputResWidth, outputResHeight);
                 Camera camera = new Camera();
                 camera.setLocation(new BlockPos(cameraX, 0, cameraZ));
-                generator.generate(camera,outputResWidth,outputResHeight,zoom);
+                generator.generate(camera,outputResWidth,outputResHeight);
+                chunkRenderer.renderChunks(world,camera,outputResWidth,outputResHeight,false);
                 int worldStartX = (int)Math.ceil((float)(cameraX - outputResWidth/2) / zoom);
                 int worldStartZ = (int)Math.ceil((float)(cameraZ - outputResHeight/2) / zoom);
                 int worldEndX = (int)Math.ceil((float)(cameraX + outputResWidth/2) / zoom);
                 int worldEndZ = (int)Math.ceil((float)(cameraZ + outputResHeight/2) / zoom);
                 int worldSizeX = (Math.abs(worldStartX)+worldEndX);
                 int worldSizeZ = (Math.abs(worldStartZ)+worldEndZ);
-                image.render(world, camera, false, details, zoom, null, false);
+                renderer.render(world, camera, false, false,zoom);
 
                 int fontSize = outputResWidth/100;
 
-                data.render(("Terra2D Terrain Visualizer\nmade by matez for WildNature mod\n-----------\nCamPos: " + cameraX + "x" + cameraZ + "\nDetails: " + details + "   Zoom: " + zoom + "\nWorld Size: " + worldSizeX + "x" + worldSizeZ),null,false,false,fontSize);
+                data.render(("Terra2D Terrain Visualizer\nmade by matez for WildNature mod\n-----------\nCamPos: " + cameraX + "x" + cameraZ + "Zoom: " + zoom + "\nWorld Size: " + worldSizeX + "x" + worldSizeZ),false,false,fontSize);
                 BufferedImage bufferedImage = new BufferedImage(outputResWidth,outputResHeight,BufferedImage.TYPE_INT_ARGB);
-                BufferedImage worldImage = image.getBufferedImage();
+                BufferedImage worldImage = renderer.getBufferedImage();
                 BufferedImage dataImage = data.getBufferedImage();
                 Graphics graphics = bufferedImage.getGraphics();
                 graphics.drawImage(worldImage,0,0,null);

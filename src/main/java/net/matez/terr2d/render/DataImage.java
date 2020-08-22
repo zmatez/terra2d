@@ -1,15 +1,20 @@
 package net.matez.terr2d.render;
 
-import com.sun.istack.internal.Nullable;
 import net.matez.terr2d.setup.Main;
 
+import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
+import java.io.IOException;
 import java.util.Arrays;
 
 public class DataImage {
+    private int width, height;
+    private boolean isLogoDrawn = false;
     private BufferedImage bufferedImage;
+    private BufferedImage logo;
+    private Graphics2D graphics;
     private int fontSize = 18;
     private boolean invertColors = false;
     private String oldText = "";
@@ -20,12 +25,23 @@ public class DataImage {
 
     public void createBufferedImage(int width, int height) {
         Main.LOGGER.debug("Creating buffered image with size: " + width + "x" + height);
-        bufferedImage = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
+        bufferedImage = RenderUtils.createHardwareAcceleratedImage(width,height,true);
+        graphics = (Graphics2D)bufferedImage.getGraphics();
+        this.width=width;
+        this.height=height;
+        try {
+            logo = ImageIO.read(DataImage.class.getResourceAsStream("/logo.png"));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
     }
 
-    public void render(String text, @Nullable AdvancedImagePanel panel, boolean refresh, boolean showBlackPanel, int fontSize) {
-        if (oldText.equals(text) || refresh) {
+    public void render(String text, boolean refresh, boolean showBlackPanel, int fontSize) {
+        if (oldText.equals(text) && !refresh) {
             return;
+        }
+        if(refresh){
+            isLogoDrawn = false;
         }
         if(this.fontSize!=fontSize){
             this.fontSize = fontSize;
@@ -44,35 +60,32 @@ public class DataImage {
                 }
             }
         }
-        Graphics g = bufferedImage.getGraphics();
-
         String[] toDraw = text.split("\n");
         int startY = f.getSize();
         int enterPx = startY + 5;
         int currentLine = 0;
         for (String s : toDraw) {
             if (!invertColors) {
-                g.setFont(shadowFont);
-                g.setColor(DARK);
-                g.drawString(s, shadowRes + 5, currentLine * enterPx + shadowRes + startY);
-                g.setFont(f);
-                g.setColor(LIGHT);
-                g.drawString(s, 5, currentLine * enterPx + startY);
+                graphics.setFont(shadowFont);
+                graphics.setColor(DARK);
+                graphics.drawString(s, shadowRes + 5, currentLine * enterPx + shadowRes + startY);
+                graphics.setFont(f);
+                graphics.setColor(LIGHT);
+                graphics.drawString(s, 5, currentLine * enterPx + startY);
             } else {
-                g.setFont(shadowFont);
-                g.setColor(DARK);
-                g.drawString(s, shadowRes + 5, currentLine * enterPx + shadowRes + startY);
-                g.setFont(f);
-                g.setColor(LIGHT);
-                g.drawString(s, 5, currentLine * enterPx + startY);
+                graphics.setFont(shadowFont);
+                graphics.setColor(DARK);
+                graphics.drawString(s, shadowRes + 5, currentLine * enterPx + shadowRes + startY);
+                graphics.setFont(f);
+                graphics.setColor(LIGHT);
+                graphics.drawString(s, 5, currentLine * enterPx + startY);
             }
             currentLine++;
         }
-        if (panel != null) {
-            panel.invalidate();
-            panel.validate();
-            panel.repaint();
-        }
+
+        int finalLogoWidth = (logo.getWidth()-210)/20;
+        int finalLogoHeight = (logo.getHeight()-41)/20;
+        graphics.drawImage(logo, 0, height - (int)(finalLogoHeight*1.75),finalLogoWidth,finalLogoHeight, null);
     }
 
     public BufferedImage getBufferedImage() {

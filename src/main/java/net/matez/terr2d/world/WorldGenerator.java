@@ -2,7 +2,6 @@ package net.matez.terr2d.world;
 
 import net.matez.terr2d.block.BlockRegistry;
 import net.matez.terr2d.math.BlockPos;
-import net.matez.terr2d.math.ColumnPos;
 import net.matez.terr2d.noise.FastNoise;
 import net.matez.terr2d.render.Camera;
 
@@ -19,27 +18,56 @@ public class WorldGenerator {
         noise.SetFractalType(FastNoise.FractalType.FBM);
     }
 
-    public void generate(Camera camera, int width, int height, float zoom){
+    public void generate(Camera camera, int width, int height){
         BlockPos cameraPos = camera.getLocation();
         int cameraX = cameraPos.getX();
         int cameraZ = cameraPos.getZ();
-        int worldStartX = (int)Math.ceil((float)(cameraX - width/2) / zoom);
-        int worldStartZ = (int)Math.ceil((float)(cameraZ - height/2) / zoom);
-        int worldEndX = (int)Math.ceil((float)(cameraX + width/2) / zoom);
-        int worldEndZ = (int)Math.ceil((float)(cameraZ + height/2) / zoom);
+        int worldStartX = (int)Math.ceil((float)(cameraX - width/2));
+        int worldStartZ = (int)Math.ceil((float)(cameraZ - height/2));
+        int offsetX = calculateOffset(worldStartX);//0 -> 128
+        int offsetZ = calculateOffset(worldStartZ);
+        int worldEndX = roundToChunkPos((int)Math.ceil((float)(cameraX + width/2))+offsetX);
+        int worldEndZ = roundToChunkPos((int)Math.ceil((float)(cameraZ + height/2))+offsetZ);
 
-        for(int x = worldStartX; x < worldEndX; x++){
-            for(int z = worldStartZ; z < worldEndZ; z++){
-                generate(new BlockPos(x,0,z));
+        for(int x = worldStartX; x < worldEndX; x+=Chunk.CHUNK_SIZE){
+            for(int z = worldStartZ; z < worldEndZ; z+=Chunk.CHUNK_SIZE){
+                Chunk chunk = world.getChunk(x,z);
+                if(!chunk.isDirty()) {
+                    generate(chunk);
+                }
             }
         }
     }
 
-    private void generate(BlockPos pos){
-        if(!world.getColumn(new ColumnPos(pos.getX(),pos.getZ())).isDirty()) {
-            float noiseVal = noise.GetSimplexFractal(pos.getX(), pos.getZ())*100;
-            world.setBlock(pos.up((int) noiseVal), BlockRegistry.STONE);
-            world.getColumn(new ColumnPos(pos.getX(), pos.getZ())).markDirty();
+    private int calculateOffset(int i) {
+        if(i<0){
+            int a = Chunk.CHUNK_SIZE + (i % Chunk.CHUNK_SIZE);
+            if(a==Chunk.CHUNK_SIZE){
+                return 0;
+            }
+            return a;
         }
+        return (i % Chunk.CHUNK_SIZE);
+    }
+
+    private int roundToChunkPos(int i){
+        return (int) Math.ceil((double)i / Chunk.CHUNK_SIZE) * Chunk.CHUNK_SIZE;
+    }
+
+
+    private void generate(Chunk chunk){
+        for(int x = 0; x < Chunk.CHUNK_SIZE; x++){
+            for(int z = 0; z < Chunk.CHUNK_SIZE; z++){
+                BlockColumn column = chunk.getColumnRelative(x,z);
+                if(!column.isDirty()){
+                    float noiseVal = noise.GetSimplexFractal(chunk.getChunkPos().getX()+x, chunk.getChunkPos().getZ()+z)*100;
+                    BlockPos pos = new BlockPos(x,0,z);
+                    pos = pos.up((int) noiseVal);
+                    chunk.setBlockRelative(pos, BlockRegistry.STONE);
+                    column.markDirty();
+                }
+            }
+        }
+        chunk.markDirty();
     }
 }
