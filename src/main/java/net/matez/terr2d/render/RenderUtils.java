@@ -18,6 +18,7 @@ public class RenderUtils {
             return config.createCompatibleImage(width, height, alpha
                     ? Transparency.TRANSLUCENT : Transparency.OPAQUE);
         }catch (OutOfMemoryError error){
+            Main.LOGGER.fatal("Out of memory!");
             JOptionPane.showMessageDialog(null,"Out of memory!","Error while generating image",JOptionPane.WARNING_MESSAGE);
             Main.zoom = 1;
             return null;

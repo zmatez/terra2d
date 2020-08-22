@@ -3,20 +3,44 @@ package net.matez.terr2d.setup;
 import net.matez.terr2d.log.Logger;
 import net.matez.terr2d.math.BlockPos;
 import net.matez.terr2d.render.*;
-import net.matez.terr2d.world.Chunk;
 import net.matez.terr2d.world.World;
 import net.matez.terr2d.world.WorldGenerator;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.awt.image.BufferedImage;
 import java.util.concurrent.CompletableFuture;
 
 public class Main extends JFrame {
+    //setup
     private static JFrame frame;
     public static Main instance;
     public static Logger LOGGER;
+    public static int width, height;
+    public static int zoomedWidth, zoomedHeight;
+
+    //data
+    private static int dragMoveX = 0, dragMoveY = 0;
+    private int mouseX, mouseZ;
+    private int clickX, clickZ;
+    private boolean isControlDown = false, isAltDown = false;
+    private boolean dragging = false;
+
+    //settings
+    private int dragSmoothness = 1;
+    public static float zoom = 1;
+
+    private static boolean refreshVisuals = false;
+    private static boolean showWater = false;
+    private static boolean showKeybindings = false;
+    private static boolean renderChunkData = false;
+    private static int heightDiv = 0;
+
+    //metering
+    private int ups;
+    private long time;
+
+    //instances
     public World world;
     public HUDImage hudImage;
     public DataImage dataImage;
@@ -25,20 +49,6 @@ public class Main extends JFrame {
     public ChunkRenderer chunkRenderer;
     public WorldRenderer worldRenderer;
     public final WorldGenerator generator;
-
-    private static int dragMoveX = 0, dragMoveY = 0, clickPosX, clickPosY;
-    private int dragSmoothness = 1;
-    public static float zoom = 1;
-    private int ups;
-    private long time;
-    private boolean dragging = false;
-    private int mouseX, mouseY;
-    private String dataText = "";
-    private static boolean refreshVisuals = false;
-    private static boolean showWater = false;
-    private static boolean showKeybindings = false;
-    private static boolean renderChunkData = false;
-    private static int heightDiv = 0;
 
     private String keybindings = "Keybindings:" +
             "\nZoom: SCROLL" +
@@ -61,35 +71,41 @@ public class Main extends JFrame {
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         frame.setLayout(null);
         frame.setVisible(true);
-        frame.setTitle("Terra2D - - - made by matez");
+        frame.setTitle("Terra2D - by matez");
         instance = new Main();
 
         LOGGER.success("Finished");
     }
 
     public Main() {
-        this.world = new World();
-        this.generator = new WorldGenerator(world);
-        this.hudImage = new HUDImage();
-        this.dataImage = new DataImage();
-        this.camera = new Camera();
-        this.chunkRenderer = new ChunkRenderer();
-        this.worldRenderer = new WorldRenderer();
-        camera.setLocation(new BlockPos(frame.getWidth() / 2, 0, frame.getHeight() / 2));
-        int width = Math.round(frame.getWidth()*zoom);
-        int height = Math.round(frame.getHeight()*zoom);
-        hudImage.createBufferedImage(frame.getWidth(), frame.getHeight());
-        dataImage.createBufferedImage(frame.getWidth(), frame.getHeight());
-        worldRenderer.create(width, height);
+        world = new World();
+        generator = new WorldGenerator(world);
+        hudImage = new HUDImage();
+        dataImage = new DataImage();
+        camera = new Camera();
+        chunkRenderer = new ChunkRenderer();
+        worldRenderer = new WorldRenderer();
 
-        panel = new AdvancedImagePanel(worldRenderer.getBufferedImage(), hudImage.getBufferedImage(), dataImage.getBufferedImage(),frame.getWidth(),frame.getHeight());
-        panel.setBounds(0, 0, frame.getWidth(), frame.getHeight());
+        width = frame.getWidth();
+        height = frame.getHeight();
+        zoomedWidth = Math.round(width * zoom);
+        zoomedHeight = Math.round(height * zoom);
+
+        camera.setLocation(new BlockPos(width / 2, 0, height / 2));
+
+        worldRenderer.create(zoomedWidth, zoomedHeight);
+        hudImage.createBufferedImage(zoomedWidth, zoomedHeight);
+        dataImage.createBufferedImage(width, height);
+
+        panel = new AdvancedImagePanel(worldRenderer.getBufferedImage(), hudImage.getBufferedImage(), dataImage.getBufferedImage(),width,height);
+        panel.setBounds(0, 0, width, height);
         panel.setBackground(Color.BLACK);
         frame.add(panel);
-
         frame.invalidate();
         frame.validate();
         frame.repaint();
+
+
 
         setupListeners();
 
@@ -144,14 +160,12 @@ public class Main extends JFrame {
         });
 
         worldRenderer.render(world,camera, renderChunkData,refreshVisuals,zoom);
-        hudImage.render(camera,zoom, mouseX, mouseY,refreshVisuals);
-        int screenWidth = worldRenderer.getWidth();
-        int screenHeight = worldRenderer.getHeight();
+        hudImage.render(camera,zoom, mouseX, mouseZ,refreshVisuals);
         BlockPos cameraPos = camera.getLocation();
         int cameraX = cameraPos.getX();
         int cameraZ = cameraPos.getZ();
-        int worldStartX = (int) Math.ceil((float) (cameraX - screenWidth / 2));
-        int worldStartZ = (int) Math.ceil((float) (cameraZ - screenHeight / 2));
+        int worldStartX = (int) Math.ceil((float) (cameraX - width / 2));
+        int worldStartZ = (int) Math.ceil((float) (cameraZ - height / 2));
 
         int pointerX = (hudImage.getOldPointerX()+worldStartX);
         int pointerZ = (hudImage.getOldPointerY()+worldStartZ);
@@ -159,11 +173,11 @@ public class Main extends JFrame {
         int pointerY = world.getChunk(pointerX,pointerZ).getColumn(pointerX,pointerZ).getColumnMaxHeight();
 
         //int[] generatedWorldSize = world.getGeneratedWorldSize();
-        dataText = "Terra2D Terrain Visualizer" +
+        String dataText = "Terra2D Terrain Visualizer" +
                 "\n---------" +
                 "\nCoordinates: " + "x"+ pointerX + " y" + pointerY+ " z" + pointerZ +
                 "\nWorld Generated Size: " + /*generatedWorldSize[0] + "x" +generatedWorldSize[1] +*/
-                "\nScreen Size: " + screenWidth + "x" + screenHeight +
+                "\nScreen Size: " + width + "x" + height +
                 "\nZoom: " + (double)zoom +
                 "\nHeightmap Details: " + getHeightDiv();
 
@@ -182,9 +196,7 @@ public class Main extends JFrame {
             refreshVisuals = false;
         }
     }
-
-    private boolean isControlDown = false, isAltDown = false;
-
+    
     public void setupListeners() {
         panel.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
 
@@ -196,8 +208,8 @@ public class Main extends JFrame {
 
             @Override
             public void mousePressed(MouseEvent e) {
-                clickPosX = e.getX();
-                clickPosY = e.getY();
+                clickX = e.getX();
+                clickZ = e.getY();
                 dragging = true;
             }
 
@@ -216,7 +228,7 @@ public class Main extends JFrame {
             public void mouseExited(MouseEvent e) {
                 panel.setCursor(Cursor.getPredefinedCursor(Cursor.DEFAULT_CURSOR));
                 mouseX = -1;
-                mouseY = -1;
+                mouseZ = -1;
                 dragging = false;
             }
         });
@@ -225,19 +237,19 @@ public class Main extends JFrame {
             @Override
             public void mouseDragged(MouseEvent e) {
                 panel.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-                int dx = e.getX() - clickPosX;
-                int dy = e.getY() - clickPosY;
+                int dx = e.getX() - clickX;
+                int dy = e.getY() - clickZ;
                 dragMoveX = dragMoveX - dx;
                 dragMoveY = dragMoveY - dy;
-                clickPosX = e.getX();
-                clickPosY = e.getY();
+                clickX = e.getX();
+                clickZ = e.getY();
                 dragging = true;
             }
 
             @Override
             public void mouseMoved(MouseEvent e) {
                 mouseX = e.getX();
-                mouseY = e.getY();
+                mouseZ = e.getY();
             }
 
         });
@@ -278,8 +290,9 @@ public class Main extends JFrame {
                 if (evt.getComponent() != frame) {
                     return;
                 }
+
                 zoom(zoom);
-                panel.setBounds(0, 0, frame.getWidth(), frame.getHeight());
+                panel.setBounds(0, 0, width, height);
                 frame.invalidate();
                 frame.validate();
                 frame.repaint();
@@ -291,12 +304,14 @@ public class Main extends JFrame {
 
     public void zoom(float newZoom){
         zoom = newZoom;
-        int width = Math.round(frame.getWidth()*newZoom);
-        int height = Math.round(frame.getHeight()*newZoom);
-        worldRenderer.create(width, height);
-        hudImage.createBufferedImage(width, height);
-        dataImage.createBufferedImage(frame.getWidth(), frame.getHeight());
-        panel.setImage(worldRenderer.getBufferedImage(), hudImage.getBufferedImage(), dataImage.getBufferedImage(),frame.getWidth(),frame.getHeight());
+        width = frame.getWidth();
+        height = frame.getHeight();
+        zoomedWidth = Math.round(width * zoom);
+        zoomedHeight = Math.round(height * zoom);
+        worldRenderer.create(zoomedWidth, zoomedHeight);
+        hudImage.createBufferedImage(zoomedWidth, zoomedHeight);
+        dataImage.createBufferedImage(width, height);
+        panel.setImage(worldRenderer.getBufferedImage(), hudImage.getBufferedImage(), dataImage.getBufferedImage(),width,height);
         frame.invalidate();
         frame.validate();
         frame.repaint();
@@ -385,7 +400,7 @@ public class Main extends JFrame {
                     }
                 }
                 if (e.getKeyCode() == KeyEvent.VK_S) {
-                    ScreenshotCreator creator = new ScreenshotCreator(generator,chunkRenderer,world,camera,frame.getWidth(),frame.getHeight(),zoom);
+                    ScreenshotCreator creator = new ScreenshotCreator(generator,chunkRenderer,world,camera,width,height,zoom);
                 }
             }
         }else{

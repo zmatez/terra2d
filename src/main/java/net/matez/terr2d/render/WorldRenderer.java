@@ -31,7 +31,7 @@ public class WorldRenderer {
 
         graphics.setStroke(new BasicStroke((float)Math.ceil(zoom)));
         int zoomedFontSize = (int)Math.ceil(zoom * 14);
-        int fontSize = Math.min(zoomedFontSize, Chunk.CHUNK_SIZE);
+        int fontSize = Math.max(Math.min(zoomedFontSize, Chunk.CHUNK_SIZE),10);
         graphics.setFont(new Font("Consolas",Font.PLAIN,fontSize));
 
         BlockPos cameraPos = camera.getLocation();

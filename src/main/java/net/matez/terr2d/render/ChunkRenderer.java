@@ -25,9 +25,7 @@ public class ChunkRenderer {
         }else{
             oldRenderVersion = renderVersion;
         }
-
-
-
+        
         BlockPos cameraPos = camera.getLocation();
         int cameraX = cameraPos.getX();
         int cameraZ = cameraPos.getZ();
